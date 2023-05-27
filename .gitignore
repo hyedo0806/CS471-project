@@ -1,0 +1,15 @@
+# csv data
+champs.csv
+matches.csv
+participants.csv
+stats1.csv
+stats2.csv
+
+itemEncode2.txt
+itemEncode1.txt
+itemEncode.txt
+
+
+*.pyc
+__pycache__
+venv
