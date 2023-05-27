@@ -124,7 +124,7 @@ class GraphSage(nn.Module):
 
     for layer in self.layers:
       list_feat.append( layer(list_feat[-1], edge, degree))
-
+    
     out = self.classifier(list_feat[-1])
 
     return out
@@ -133,14 +133,26 @@ class GraphSage(nn.Module):
 class Classifier(nn.Module):
   def __init__(self):
     super(Classifier, self).__init__()
+
+    layers = []
   
-    self.sigmoid = nn.Sigmoid()
-    self.classifier = nn.Linear(32, 1, dtype=torch.float32)
+    layers.append(nn.Linear(32, 32, dtype=torch.float32))
+    layers.append(nn.ReLU())
+    layers.append(nn.Linear(32, 32, dtype=torch.float32))
+    layers.append(nn.ReLU())
+    layers.append(nn.Linear(32, 16, dtype=torch.float32))
+    layers.append(nn.ReLU())
+    layers.append(nn.Linear(16, 16, dtype=torch.float32))
+    layers.append(nn.ReLU())
+    layers.append(nn.Linear(16, 1, dtype=torch.float32))
+    layers.append(nn.Sigmoid())
+
+    self.classifier = nn.Sequential(*layers)
+
 
   def forward(self, x):
 
     out = self.classifier(x)
-    out = self.sigmoid(out)
 
     return out
 
@@ -167,29 +179,28 @@ def win_loss(out):
 
 def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
           lr=0.001, num_epoch=200):
-  optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
   loss_fn = nn.BCELoss()
 
-  best_valid = -1
+
   list_valid_f1 = []
   list_loss = []
 
-  for epoch in range(num_epoch):
+  for epoch in tqdm(range(num_epoch)):
     ## ----- random index for training ( lab3 참고 )
-    idx_shuffle = list(range(num_node))
-    random.shuffle(idx_shuffle)
-    idx_train = idx_shuffle[:int(0.8 * num_node)]
-    idx_valid = idx_shuffle[int(0.8 * num_node):int(0.9 * num_node)]
-
+    # idx_shuffle = list(range(num_node))
+    # random.shuffle(idx_shuffle)
+    idx_train = [ i for i in range(int(0.8 * num_node))]
+    idx_valid = [i for i in range( int(0.8 * num_node),int(0.9 * num_node))]
 
     optimizer.zero_grad()
     target = label[idx_train]
 
     # TODO: Compute output features
-    feature = model(feat, edge, degree)
-    
+    pred = model(feat, edge, degree)
+    print("output : ", pred)
     # TODO: Calculate loss funciton using loss_fn
-    loss = loss_fn(feature[idx_train], target)
+    loss = loss_fn(pred[idx_train], target)
 
     loss.backward()
     optimizer.step()
@@ -202,14 +213,14 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
       target = label[idx_valid]
 
       # TODO: Compute output features
-      feature = model(feat, edge, degree)
+      pred = model(feat, edge, degree)
       
       # TODO: Extract predicted labels
-      _, pred = torch.max(feature[idx_valid], 1)
-      pred = pred.detach().cpu()
+      _, _pred = torch.max(pred[idx_valid], 1)
+      _pred = _pred.detach().cpu()
 
       # TODO: Calculate F1 score (micro) using f1_score()
-      f1_val = f1_score(target, pred, average='micro')
+      f1_val = f1_score(target, _pred, average='micro')
 
       list_valid_f1.append(f1_val)
       print(f"F1 Score: {f1_val}")
@@ -262,10 +273,10 @@ if __name__=="__main__":
     #        'goldspent', 'turretkills', 'inhibkills', 'totminionskilled',
     #        'neutralminionskilled', 'ownjunglekills', 'enemyjunglekills',
     #        'totcctimedealt', 'champlvl', 'pinksbought', 'wardsbought',
-    #        'wardsplaced', 'wardskilled', 'firstblood', 'matchid', 'BOT', 'JUNGLE',
-    #        'MID', 'SUPPORT', 'TOP'],
-    #       dtype='object')
+    #        'wardsplaced', 'wardskilled', 'firstblood', 
+    #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
+   
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
 
     ## ----- X : feature, Y : label 
@@ -291,63 +302,3 @@ if __name__=="__main__":
     list_loss_gcn, list_valid_f1_gcn = train(model, mode, featT, edgeT, degreeT, labelT)
     
     torch.save(model.state_dict(), 'model.pth')
-    
-# #### 5/27 19:33 기준 F1 score log  ####
-# 0.5로 계속 유지 -> 학습이 되질 않는다.
-
-# F1 Score: 0.49916627759621157
-# Checkpoint updated!
-# F1 Score: 0.5007753618355233
-# Checkpoint updated!
-# F1 Score: 0.5009337690922431
-# Checkpoint updated!
-# F1 Score: 0.49964983659040885
-# F1 Score: 0.5010338157806976
-# Checkpoint updated!
-# F1 Score: 0.4967818315213766
-# F1 Score: 0.5008420596278264
-# F1 Score: 0.4988244514106583
-# F1 Score: 0.5011088507970386
-# Checkpoint updated!
-# F1 Score: 0.5024177949709865
-# Checkpoint updated!
-# F1 Score: 0.4984409391049156
-# F1 Score: 0.5008754085239778
-# F1 Score: 0.4991245914760221
-# F1 Score: 0.49949142933368906
-# F1 Score: 0.5029847262055626
-# Checkpoint updated!
-# F1 Score: 0.49985826719135595
-# F1 Score: 0.5004168612018942
-# F1 Score: 0.5010421530047355
-# F1 Score: 0.4990412192356433
-# F1 Score: 0.4978823450943774
-# F1 Score: 0.5007003268191823
-# F1 Score: 0.5007336757153338
-# F1 Score: 0.5003585006336291
-# F1 Score: 0.49926632428466616
-# F1 Score: 0.49810745014340024
-# F1 Score: 0.5008003735076368
-# F1 Score: 0.5017174681518042
-# F1 Score: 0.5010421530047355
-# F1 Score: 0.5002751283932502
-# F1 Score: 0.5013923164143267
-# F1 Score: 0.4998499299673181
-# F1 Score: 0.5006336290268792
-# F1 Score: 0.5013172813979857
-# F1 Score: 0.5005085706663109
-# F1 Score: 0.5001667444807577
-# F1 Score: 0.5002751283932502
-# F1 Score: 0.49944140598946174
-# F1 Score: 0.4999499766557727
-# F1 Score: 0.5027262722603881
-# F1 Score: 0.5004752217701595
-# F1 Score: 0.49947475488561327
-# F1 Score: 0.5003334889615154
-# F1 Score: 0.4998332555192423
-# F1 Score: 0.4980157406789835
-# F1 Score: 0.5012589208297206
-# F1 Score: 0.5008503968518642
-# F1 Score: 0.5002334422730608
-# F1 Score: 0.4976572400453545
-# F1 Score: 0.4998999533115454
