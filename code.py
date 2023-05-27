@@ -117,7 +117,6 @@ class GraphSage(nn.Module):
 
     self.layers = nn.ModuleList(layers)
 
-    # self.classifier = nn.Linear(self.dim_hidden, self.dim_out, dtype=torch.float32) 
     self.classifier = Classifier()    
 
   def forward(self, feat, edge, degree):
@@ -145,7 +144,7 @@ class Classifier(nn.Module):
 
     return out
 
-
+### trainset index를 셔플하지 않고 그래도 순차적으로 사용하면 이 코드를 사용할 수 있으나, 아래와 같이 index를 random하게 사용하면 다른 코드를 작성해야함. 하지만 계산 시간이 걸린다.
 def win_loss(out):
   new_x = out.clone()  # 새로운 텐서를 생성하여 결과를 저장할 준비
 
@@ -293,4 +292,62 @@ if __name__=="__main__":
     
     torch.save(model.state_dict(), 'model.pth')
     
-    
+# #### 5/27 19:33 기준 F1 score log  ####
+# 0.5로 계속 유지 -> 학습이 되질 않는다.
+
+# F1 Score: 0.49916627759621157
+# Checkpoint updated!
+# F1 Score: 0.5007753618355233
+# Checkpoint updated!
+# F1 Score: 0.5009337690922431
+# Checkpoint updated!
+# F1 Score: 0.49964983659040885
+# F1 Score: 0.5010338157806976
+# Checkpoint updated!
+# F1 Score: 0.4967818315213766
+# F1 Score: 0.5008420596278264
+# F1 Score: 0.4988244514106583
+# F1 Score: 0.5011088507970386
+# Checkpoint updated!
+# F1 Score: 0.5024177949709865
+# Checkpoint updated!
+# F1 Score: 0.4984409391049156
+# F1 Score: 0.5008754085239778
+# F1 Score: 0.4991245914760221
+# F1 Score: 0.49949142933368906
+# F1 Score: 0.5029847262055626
+# Checkpoint updated!
+# F1 Score: 0.49985826719135595
+# F1 Score: 0.5004168612018942
+# F1 Score: 0.5010421530047355
+# F1 Score: 0.4990412192356433
+# F1 Score: 0.4978823450943774
+# F1 Score: 0.5007003268191823
+# F1 Score: 0.5007336757153338
+# F1 Score: 0.5003585006336291
+# F1 Score: 0.49926632428466616
+# F1 Score: 0.49810745014340024
+# F1 Score: 0.5008003735076368
+# F1 Score: 0.5017174681518042
+# F1 Score: 0.5010421530047355
+# F1 Score: 0.5002751283932502
+# F1 Score: 0.5013923164143267
+# F1 Score: 0.4998499299673181
+# F1 Score: 0.5006336290268792
+# F1 Score: 0.5013172813979857
+# F1 Score: 0.5005085706663109
+# F1 Score: 0.5001667444807577
+# F1 Score: 0.5002751283932502
+# F1 Score: 0.49944140598946174
+# F1 Score: 0.4999499766557727
+# F1 Score: 0.5027262722603881
+# F1 Score: 0.5004752217701595
+# F1 Score: 0.49947475488561327
+# F1 Score: 0.5003334889615154
+# F1 Score: 0.4998332555192423
+# F1 Score: 0.4980157406789835
+# F1 Score: 0.5012589208297206
+# F1 Score: 0.5008503968518642
+# F1 Score: 0.5002334422730608
+# F1 Score: 0.4976572400453545
+# F1 Score: 0.4998999533115454
