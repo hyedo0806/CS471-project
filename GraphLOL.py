@@ -9,6 +9,9 @@ from sklearn.metrics import f1_score, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 import math
 from sklearn.model_selection import KFold
+
+from torch.utils.tensorboard import SummaryWriter
+
 torch.autograd.set_detect_anomaly(True)
 
 def normalization_df(df):
@@ -33,25 +36,35 @@ def edgeAndDegree(num, topButtomCut, position_df = None):
     edges = torch.zeros((50*num,2))
     cnt = 0
     for k in tqdm(range(num)):
+      # connecting intra-team
       for i in range(1,5):
         for j in range(i, 5):
           if (position_df['TOP'][i] == 1 and (position_df['BOT'][j] == 1 or position_df['SUPPORT'][j])) or (position_df['TOP'][j] == 1 and (position_df['BOT'][i] == 1 or position_df['SUPPORT'][i])):
-            edges[cnt][0] = i+k*10
-            edges[cnt][1] = i+5+k*10
-            edges[cnt+1][0] = i+5+k*10
-            edges[cnt+1][1] = i+k*10
-          else:
-# TODO 선 잇는것 구현하기
+            # edges[cnt][0] = i+k*10
+            # edges[cnt][1] = j+k*10
+            # edges[cnt+1][0] = i+5+k*10
+            # edges[cnt+1][1] = j+5+k*10  
             pass
-          
+          else:
+            edges[cnt][0] = i+k*10
+            edges[cnt][1] = j+k*10
+            edges[cnt+1][0] = i+5+k*10
+            edges[cnt+1][1] = j+5+k*10  
           cnt +=2
+      
+      # inter-team connecting
+      for i in range(1,5):
+        edges[cnt][0] = i+k*10
+        edges[cnt][1] = i+5+k*10
+        edges[cnt+1][0] = i+5+k*10
+        edges[cnt+1][1] = i+k*10
+        cnt +=2
+          
+    # degrees = torch.empty((10 * num,))
+    # degrees.fill_(5)
 
-            
-    degrees = torch.empty((10 * num,))
-    degrees.fill_(5)
+    # return edges.to(device), degrees.to(device)
 
-    return edges.to(device), degrees.to(device)
-  
 
   else:
     edges = torch.zeros((50*num,2))
@@ -72,10 +85,10 @@ def edgeAndDegree(num, topButtomCut, position_df = None):
           cnt +=2
 
             
-    degrees = torch.empty((10 * num,))
-    degrees.fill_(5)
+  degrees = torch.empty((10 * num,))
+  degrees.fill_(5)
 
-    return edges.to(device), degrees.to(device)
+  return edges.to(device), degrees.to(device)
 
 
 class GraphSageLayer(nn.Module):
@@ -208,7 +221,9 @@ def win_loss(out):
 
 
 def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
-          lr=0.001, num_epoch=200):
+          lr=0.001, num_epoch=200, writer = None):
+
+
   optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
   loss_fn = nn.BCEWithLogitsLoss()
 
@@ -219,18 +234,12 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
 
   for epoch in range(num_epoch):
     ## ----- random index for training ( lab3 참고 )
-    # idx_shuffle = list(range(num_node))
-    # random.shuffle(idx_shuffle)
 
     cut_down = (int(0.8 * num_node)//10)*10
     valid = (int(0.1 * num_node)//10)*10
-    # idx_train = [ i for i in range(int(0.8 * num_node))]
-    # idx_valid = [i for i in range( int(0.8 * num_node),int(0.9 * num_node))]
 
     idx_train = [ i for i in range(cut_down)]
     idx_valid = [i for i in range(cut_down,cut_down+valid)]
-
-
 
     optimizer.zero_grad()
     target = label[idx_train]
@@ -238,6 +247,9 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
     pred = model(feat, edge, degree)
     loss = loss_fn(pred[idx_train], target)
     loss.backward()
+
+    # train loss 기록하는 함수
+    writer.add_scalar("Loss/train", loss, epoch)
     optimizer.step()
 
     list_loss.append(loss.item())
@@ -255,8 +267,10 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
       # _, _pred = torch.max(pred[idx_valid], 0)
       _pred = _pred.detach().cpu()
 
-      print(_pred)
+      # print(_pred)
       f1_val = f1_score(target, _pred, average='micro')
+
+      writer.add_scalar("F1 score/Validation", f1_val, epoch)
 
       list_valid_f1.append(f1_val)
       print(f"F1 Score: {f1_val}")
@@ -293,7 +307,9 @@ def visualize(num_epoch, list_loss, list_valid_f1, title):
 
 if __name__=="__main__":
 
-    topButtomCut = False
+    writer = SummaryWriter()
+
+    topButtomCut = True
 
     device = torch.device('cpu')
 
@@ -314,7 +330,7 @@ if __name__=="__main__":
     #        'wardsplaced', 'wardskilled', 'firstblood', 
     #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
-    print(trainsetEncoded[:20])
+    # print(trainsetEncoded[:20])
     # exit()
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
 
@@ -336,10 +352,11 @@ if __name__=="__main__":
     
     ## ----- edge & degree
 
+    # topBottomCut 이란 top 과 Bottom 두명 사이의 connection을 없애는 작업을 의미한다.
     if topButtomCut:
-      edgeT, degreeT = edgeAndDegree(num_node//10, cut = topButtomCut, trainsetEncoded[['BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP']])
+      edgeT, degreeT = edgeAndDegree(num_node//10, topButtomCut, position_df = trainsetEncoded[['BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP']])
     else:
-      edgeT, degreeT = edgeAndDegree(num_node//10, cut = topButtomCut)
+      edgeT, degreeT = edgeAndDegree(num_node//10, topButtomCut)
 
     # print(edgeT, degreeT)
     # print(edgeT.shape, degreeT.shape)
@@ -350,6 +367,9 @@ if __name__=="__main__":
     ## -----  모델 구조 lab3 참고
     mode = 'gcn'
     model = GraphSage(2, dim_feat, 32, 1, mode).to(device)
-    list_loss_gcn, list_valid_f1_gcn = train(model, mode, featT, edgeT, degreeT, labelT)
+    # writer 는 tensorboard 때문에 존재.
+    list_loss_gcn, list_valid_f1_gcn = train(model, mode, featT, edgeT, degreeT, labelT, writer=writer)
     
+    writer.close()
+
     torch.save(model.state_dict(), 'model.pth')
