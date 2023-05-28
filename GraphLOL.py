@@ -15,12 +15,15 @@ torch.autograd.set_detect_anomaly(True)
 def read_graph_nodes_relations(data):
 
   dataFiltered = data.groupby("matchid").filter(lambda x: len(x) == 10)
+  # data를 refine 했기 때문에 length 이 10이 아닐수도 있음
+
   graph = dataFiltered['matchid'].unique()
  
   return [i for i in range(graph.shape[0]*10)], graph
 
 def edgeAndDegree(num, nodes):
-  
+  # 이 부분 attention 해서 봐야 할 것 같음
+  # edge 를 순서대로 나열하는 곳
   edges = torch.zeros((50*num,2))
   cnt = 0
   for k in tqdm(range(num)):
@@ -123,7 +126,7 @@ class GraphSage(nn.Module):
     list_feat = [feat]
 
     for layer in self.layers:
-      list_feat.append( layer(list_feat[-1], edge, degree))
+      list_feat.append(layer(list_feat[-1], edge, degree))
     
     out = self.classifier(list_feat[-1])
 
@@ -151,7 +154,6 @@ class Classifier(nn.Module):
 
 
   def forward(self, x):
-
     out = self.classifier(x)
 
     return out
@@ -179,29 +181,38 @@ def win_loss(out):
 
 def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
           lr=0.001, num_epoch=200):
-  optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
-  loss_fn = nn.BCELoss()
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+  loss_fn = nn.CrossEntropyLoss()
 
+  best_valid = 0.0
 
   list_valid_f1 = []
   list_loss = []
 
-  for epoch in tqdm(range(num_epoch)):
+  for epoch in range(num_epoch):
     ## ----- random index for training ( lab3 참고 )
     # idx_shuffle = list(range(num_node))
     # random.shuffle(idx_shuffle)
-    idx_train = [ i for i in range(int(0.8 * num_node))]
-    idx_valid = [i for i in range( int(0.8 * num_node),int(0.9 * num_node))]
+
+    cut_down = (int(0.8 * num_node)//10)*10
+    valid = (int(0.1 * num_node)//10)*10
+    # idx_train = [ i for i in range(int(0.8 * num_node))]
+    # idx_valid = [i for i in range( int(0.8 * num_node),int(0.9 * num_node))]
+
+    idx_train = [ i for i in range(cut_down)]
+    idx_valid = [i for i in range(cut_down,cut_down+valid)]
+
+
 
     optimizer.zero_grad()
     target = label[idx_train]
 
     # TODO: Compute output features
     pred = model(feat, edge, degree)
-    print("output : ", pred)
+    print("output shape ", pred.shape)
     # TODO: Calculate loss funciton using loss_fn
-    loss = loss_fn(pred[idx_train], target)
-
+    loss = loss_fn(win_loss(pred[idx_train]), target)
+    print("loss:", loss)
     loss.backward()
     optimizer.step()
 
@@ -257,7 +268,7 @@ def visualize(num_epoch, list_loss, list_valid_f1, title):
 
 if __name__=="__main__":
 
-    device = torch.device('cpu')
+    device = torch.device('cuda')
 
     trainsetEncoded = pd.read_csv("trainset.txt", delimiter="\t")
     trainsetEncoded = trainsetEncoded.drop(["Unnamed: 0", "team"], axis=1)
@@ -276,8 +287,15 @@ if __name__=="__main__":
     #        'wardsplaced', 'wardskilled', 'firstblood', 
     #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
-   
+    # print(trainsetEncoded[['win','kills','deaths', 'assists', 'matchid']])
+
+    trainsetEncoded=trainsetEncoded[['win','kills','deaths', 'assists', 'matchid']]
+    print(trainsetEncoded[:20])
+    # exit()
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
+
+    # print(len(nodes), len(graphs))
+
 
     ## ----- X : feature, Y : label 
     featureE = trainsetEncoded.drop(['win', 'matchid'], axis=1)
@@ -295,6 +313,12 @@ if __name__=="__main__":
     
     ## ----- edge & degree
     edgeT, degreeT = edgeAndDegree(num_node//10, nodes)
+
+    # print(edgeT, degreeT)
+    # print(edgeT.shape, degreeT.shape)
+
+    # print(edgeT[:20])
+    # exit()
 
     ## -----  모델 구조 lab3 참고
     mode = 'gcn'
