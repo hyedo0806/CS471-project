@@ -9,9 +9,12 @@ itemEncode2.txt
 itemEncode1.txt
 itemEncode.txt
 
+*.pth
 
 *.pyc
 __pycache__
 venv
 
 trainset.txt
+
+model-gcn-*th.pt

@@ -11,6 +11,10 @@ import math
 from sklearn.model_selection import KFold
 torch.autograd.set_detect_anomaly(True)
 
+def normalization_df(df):
+  normalized_df=(df-df.mean())/df.std()
+  return normalized_df
+
 
 def read_graph_nodes_relations(data):
 
@@ -21,31 +25,57 @@ def read_graph_nodes_relations(data):
  
   return [i for i in range(graph.shape[0]*10)], graph
 
-def edgeAndDegree(num, nodes):
+def edgeAndDegree(num, topButtomCut, position_df = None):
   # 이 부분 attention 해서 봐야 할 것 같음
   # edge 를 순서대로 나열하는 곳
-  edges = torch.zeros((50*num,2))
-  cnt = 0
-  for k in tqdm(range(num)):
-    for i in range(5):
-      for j in range(5):
-        if i!=j : 
-          edges[cnt][0] = i+k*10
-          edges[cnt][1] = j+k*10
-          edges[cnt+1][0] = i+5+k*10
-          edges[cnt+1][1] = j+5+k*10   
-        else: 
-          edges[cnt][0] = i+k*10
-          edges[cnt][1] = i+5+k*10
-          edges[cnt+1][0] = i+5+k*10
-          edges[cnt+1][1] = i+k*10
-        cnt +=2
 
+  if topButtomCut:
+    edges = torch.zeros((50*num,2))
+    cnt = 0
+    for k in tqdm(range(num)):
+      for i in range(1,5):
+        for j in range(i, 5):
+          if (position_df['TOP'][i] == 1 and (position_df['BOT'][j] == 1 or position_df['SUPPORT'][j])) or (position_df['TOP'][j] == 1 and (position_df['BOT'][i] == 1 or position_df['SUPPORT'][i])):
+            edges[cnt][0] = i+k*10
+            edges[cnt][1] = i+5+k*10
+            edges[cnt+1][0] = i+5+k*10
+            edges[cnt+1][1] = i+k*10
+          else:
+# TODO 선 잇는것 구현하기
+            pass
           
-  degrees = torch.empty((10 * num,))
-  degrees.fill_(5)
+          cnt +=2
 
-  return edges.to(device), degrees.to(device)
+            
+    degrees = torch.empty((10 * num,))
+    degrees.fill_(5)
+
+    return edges.to(device), degrees.to(device)
+  
+
+  else:
+    edges = torch.zeros((50*num,2))
+    cnt = 0
+    for k in tqdm(range(num)):
+      for i in range(5):
+        for j in range(5):
+          if i!=j : 
+            edges[cnt][0] = i+k*10
+            edges[cnt][1] = j+k*10
+            edges[cnt+1][0] = i+5+k*10
+            edges[cnt+1][1] = j+5+k*10   
+          else: 
+            edges[cnt][0] = i+k*10
+            edges[cnt][1] = i+5+k*10
+            edges[cnt+1][0] = i+5+k*10
+            edges[cnt+1][1] = i+k*10
+          cnt +=2
+
+            
+    degrees = torch.empty((10 * num,))
+    degrees.fill_(5)
+
+    return edges.to(device), degrees.to(device)
 
 
 class GraphSageLayer(nn.Module):
@@ -81,7 +111,6 @@ class GraphSageLayer(nn.Module):
       return F.normalize(self.act(self.weight(agg) + self.bias(feat)), 2, -1)
     
     elif self.agg == 'mean':
-    # TODO: Implement GraphSAGE(Mean) layer (Hint: Use index_add_())
 
       feat_t = feat[edge[:, 1].long()]
       idx_h = edge[:, 0]
@@ -92,7 +121,6 @@ class GraphSageLayer(nn.Module):
       return F.normalize(self.act(self.weight(torch.cat((agg, feat), 1))), 2, -1)
 
     elif self.agg == 'maxpool':
-      # TODO: Implement GraphSAGE(Maxpool) layer (Hint: Use scatter_reduce)
       feat = self.act(self.linear_pool(feat))
       feat_t = feat[edge[:, 1]]
       idx_h = edge[:, 0]
@@ -120,7 +148,7 @@ class GraphSage(nn.Module):
 
     self.layers = nn.ModuleList(layers)
 
-    self.classifier = Classifier()    
+    self.classifier = nn.Linear(self.dim_hidden, self.dim_out, dtype=torch.float32)
 
   def forward(self, feat, edge, degree):
     list_feat = [feat]
@@ -139,14 +167,14 @@ class Classifier(nn.Module):
 
     layers = []
   
-    layers.append(nn.Linear(32, 32, dtype=torch.float32))
-    layers.append(nn.ReLU())
-    layers.append(nn.Linear(32, 32, dtype=torch.float32))
-    layers.append(nn.ReLU())
+    # layers.append(nn.Linear(32, 32, dtype=torch.float32))
+    # layers.append(nn.ReLU())
+    # layers.append(nn.Linear(32, 32, dtype=torch.float32))
+    # layers.append(nn.ReLU())
     layers.append(nn.Linear(32, 16, dtype=torch.float32))
     layers.append(nn.ReLU())
-    layers.append(nn.Linear(16, 16, dtype=torch.float32))
-    layers.append(nn.ReLU())
+    # layers.append(nn.Linear(16, 16, dtype=torch.float32))
+    # layers.append(nn.ReLU())
     layers.append(nn.Linear(16, 1, dtype=torch.float32))
     layers.append(nn.Sigmoid())
 
@@ -181,8 +209,8 @@ def win_loss(out):
 
 def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
           lr=0.001, num_epoch=200):
-  optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-  loss_fn = nn.CrossEntropyLoss()
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+  loss_fn = nn.BCEWithLogitsLoss()
 
   best_valid = 0.0
 
@@ -207,12 +235,8 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
     optimizer.zero_grad()
     target = label[idx_train]
 
-    # TODO: Compute output features
     pred = model(feat, edge, degree)
-    print("output shape ", pred.shape)
-    # TODO: Calculate loss funciton using loss_fn
-    loss = loss_fn(win_loss(pred[idx_train]), target)
-    print("loss:", loss)
+    loss = loss_fn(pred[idx_train], target)
     loss.backward()
     optimizer.step()
 
@@ -223,14 +247,15 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
     with torch.no_grad():
       target = label[idx_valid]
 
-      # TODO: Compute output features
       pred = model(feat, edge, degree)
-      
-      # TODO: Extract predicted labels
-      _, _pred = torch.max(pred[idx_valid], 1)
+      _pred = pred[idx_valid]
+      _pred[_pred>0] = 1
+      _pred[_pred<0] = 0
+
+      # _, _pred = torch.max(pred[idx_valid], 0)
       _pred = _pred.detach().cpu()
 
-      # TODO: Calculate F1 score (micro) using f1_score()
+      print(_pred)
       f1_val = f1_score(target, _pred, average='micro')
 
       list_valid_f1.append(f1_val)
@@ -268,7 +293,9 @@ def visualize(num_epoch, list_loss, list_valid_f1, title):
 
 if __name__=="__main__":
 
-    device = torch.device('cuda')
+    topButtomCut = False
+
+    device = torch.device('cpu')
 
     trainsetEncoded = pd.read_csv("trainset.txt", delimiter="\t")
     trainsetEncoded = trainsetEncoded.drop(["Unnamed: 0", "team"], axis=1)
@@ -287,18 +314,14 @@ if __name__=="__main__":
     #        'wardsplaced', 'wardskilled', 'firstblood', 
     #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
-    # print(trainsetEncoded[['win','kills','deaths', 'assists', 'matchid']])
-
-    trainsetEncoded=trainsetEncoded[['win','kills','deaths', 'assists', 'matchid']]
     print(trainsetEncoded[:20])
     # exit()
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
 
-    # print(len(nodes), len(graphs))
 
 
     ## ----- X : feature, Y : label 
-    featureE = trainsetEncoded.drop(['win', 'matchid'], axis=1)
+    featureE = normalization_df(trainsetEncoded.drop(['win', 'matchid'], axis=1))
     label = trainsetEncoded[["win"]]
 
     ## ----- data 를 tensor 형식으로 변환
@@ -312,7 +335,11 @@ if __name__=="__main__":
     dim_feat = featureE.shape[1]
     
     ## ----- edge & degree
-    edgeT, degreeT = edgeAndDegree(num_node//10, nodes)
+
+    if topButtomCut:
+      edgeT, degreeT = edgeAndDegree(num_node//10, cut = topButtomCut, trainsetEncoded[['BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP']])
+    else:
+      edgeT, degreeT = edgeAndDegree(num_node//10, cut = topButtomCut)
 
     # print(edgeT, degreeT)
     # print(edgeT.shape, degreeT.shape)
@@ -322,7 +349,7 @@ if __name__=="__main__":
 
     ## -----  모델 구조 lab3 참고
     mode = 'gcn'
-    model = GraphSage(2, dim_feat, 32, 2, mode).to(device)
+    model = GraphSage(2, dim_feat, 32, 1, mode).to(device)
     list_loss_gcn, list_valid_f1_gcn = train(model, mode, featT, edgeT, degreeT, labelT)
     
     torch.save(model.state_dict(), 'model.pth')
