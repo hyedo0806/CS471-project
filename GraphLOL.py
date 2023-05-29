@@ -180,14 +180,8 @@ class Classifier(nn.Module):
 
     layers = []
   
-    # layers.append(nn.Linear(32, 32, dtype=torch.float32))
-    # layers.append(nn.ReLU())
-    # layers.append(nn.Linear(32, 32, dtype=torch.float32))
-    # layers.append(nn.ReLU())
     layers.append(nn.Linear(32, 16, dtype=torch.float32))
     layers.append(nn.ReLU())
-    # layers.append(nn.Linear(16, 16, dtype=torch.float32))
-    # layers.append(nn.ReLU())
     layers.append(nn.Linear(16, 1, dtype=torch.float32))
     layers.append(nn.Sigmoid())
 
@@ -276,8 +270,8 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
       print(f"F1 Score: {f1_val}")
 
       if f1_val > best_valid:
-        print("Checkpoint updated!")
-        torch.save(model, f'model-{agg}-{epoch}th.pt')
+        # print("Checkpoint updated!")
+        # torch.save(model, f'model-{agg}-{epoch}th.pt')
         best_valid = f1_val
 
     model.train()
@@ -330,11 +324,7 @@ if __name__=="__main__":
     #        'wardsplaced', 'wardskilled', 'firstblood', 
     #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
-    # print(trainsetEncoded[:20])
-    # exit()
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
-
-
 
     ## ----- X : feature, Y : label 
     featureE = normalization_df(trainsetEncoded.drop(['win', 'matchid'], axis=1))
@@ -358,18 +348,12 @@ if __name__=="__main__":
     else:
       edgeT, degreeT = edgeAndDegree(num_node//10, topButtomCut)
 
-    # print(edgeT, degreeT)
-    # print(edgeT.shape, degreeT.shape)
-
-    # print(edgeT[:20])
-    # exit()
-
     ## -----  모델 구조 lab3 참고
     mode = 'gcn'
     model = GraphSage(2, dim_feat, 32, 1, mode).to(device)
     # writer 는 tensorboard 때문에 존재.
     list_loss_gcn, list_valid_f1_gcn = train(model, mode, featT, edgeT, degreeT, labelT, writer=writer)
-    
+    visualize(200, list_loss_gcn, list_valid_f1=list_valid_f1_gcn, title = "loss and F1 score")
     writer.close()
 
     torch.save(model.state_dict(), 'model.pth')
