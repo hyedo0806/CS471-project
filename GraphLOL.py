@@ -28,11 +28,11 @@ def read_graph_nodes_relations(data):
  
   return [i for i in range(graph.shape[0]*10)], graph
 
-def edgeAndDegree(num, topButtomCut, position_df = None):
+def edgeAndDegree(num, cutMode, position_df = None):
   # 이 부분 attention 해서 봐야 할 것 같음
   # edge 를 순서대로 나열하는 곳
 
-  if topButtomCut:
+  if cutMode != "N":
     edges = torch.zeros((50*num,2))
     cnt = 0
     for k in tqdm(range(num)):
@@ -40,17 +40,32 @@ def edgeAndDegree(num, topButtomCut, position_df = None):
       for i in range(1,5):
         for j in range(i, 5):
           if (position_df['TOP'][i] == 1 and (position_df['BOT'][j] == 1 or position_df['SUPPORT'][j])) or (position_df['TOP'][j] == 1 and (position_df['BOT'][i] == 1 or position_df['SUPPORT'][i])):
-            # edges[cnt][0] = i+k*10
-            # edges[cnt][1] = j+k*10
-            # edges[cnt+1][0] = i+5+k*10
-            # edges[cnt+1][1] = j+5+k*10  
-            pass
+            if (position_df['TOP'][i] == 1):
+              top_id = i
+              bot_id = j
+            else:
+              top_id = j
+              bot_id = i
+            
+            if cutMode == "2":
+              # 양방향 컷
+              pass
+            elif cutMode == "1":
+              # 단방향 컷
+              edges[cnt][0] = bot_id+k*10
+              edges[cnt][1] = top_id+k*10
+              cnt +=1
+            else:
+              print("cutMode error!")
+              assert(0)
+            
           else:
+            # 컷이랑 관련 없는 경우
             edges[cnt][0] = i+k*10
             edges[cnt][1] = j+k*10
             edges[cnt+1][0] = i+5+k*10
             edges[cnt+1][1] = j+5+k*10  
-          cnt +=2
+            cnt +=2
       
       # inter-team connecting
       for i in range(1,5):
@@ -59,11 +74,6 @@ def edgeAndDegree(num, topButtomCut, position_df = None):
         edges[cnt+1][0] = i+5+k*10
         edges[cnt+1][1] = i+k*10
         cnt +=2
-          
-    # degrees = torch.empty((10 * num,))
-    # degrees.fill_(5)
-
-    # return edges.to(device), degrees.to(device)
 
 
   else:
@@ -270,8 +280,6 @@ def train(model, agg, feat, edge, degree, label, dim_hidden=128, dim_out=7,
       print(f"F1 Score: {f1_val}")
 
       if f1_val > best_valid:
-        # print("Checkpoint updated!")
-        # torch.save(model, f'model-{agg}-{epoch}th.pt')
         best_valid = f1_val
 
     model.train()
@@ -303,26 +311,19 @@ if __name__=="__main__":
 
     writer = SummaryWriter()
 
-    topButtomCut = True
+
+    # cutMode has three types
+    
+    # "N": No cut, original
+    # "1": one-way cut. cut down from top to bottom
+    # "2": two-way cut. cut down from top to bottom and from bottom to top
+    cutMode = input("cutMode?")
+
 
     device = torch.device('cpu')
 
     trainsetEncoded = pd.read_csv("trainset.txt", delimiter="\t")
     trainsetEncoded = trainsetEncoded.drop(["Unnamed: 0", "team"], axis=1)
-    ### ----- trainsetEncoded columns
-    #  Index(['win', 'kills', 'deaths', 'assists', 'largestkillingspree',
-    #        'largestmultikill', 'killingsprees', 'longesttimespentliving',
-    #        'doublekills', 'triplekills', 'quadrakills', 'pentakills',
-    #        'legendarykills', 'totdmgdealt', 'magicdmgdealt', 'physicaldmgdealt',
-    #        'truedmgdealt', 'largestcrit', 'totdmgtochamp', 'magicdmgtochamp',
-    #        'physdmgtochamp', 'truedmgtochamp', 'totheal', 'totunitshealed',
-    #        'dmgselfmit', 'dmgtoobj', 'dmgtoturrets', 'visionscore', 'totdmgtaken',
-    #        'magicdmgtaken', 'physdmgtaken', 'truedmgtaken', 'goldearned',
-    #        'goldspent', 'turretkills', 'inhibkills', 'totminionskilled',
-    #        'neutralminionskilled', 'ownjunglekills', 'enemyjunglekills',
-    #        'totcctimedealt', 'champlvl', 'pinksbought', 'wardsbought',
-    #        'wardsplaced', 'wardskilled', 'firstblood', 
-    #         'matchid', 'BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP'], dtype='object')
     
     nodes, graphs = read_graph_nodes_relations(trainsetEncoded[["matchid"]])
 
@@ -343,10 +344,10 @@ if __name__=="__main__":
     ## ----- edge & degree
 
     # topBottomCut 이란 top 과 Bottom 두명 사이의 connection을 없애는 작업을 의미한다.
-    if topButtomCut:
-      edgeT, degreeT = edgeAndDegree(num_node//10, topButtomCut, position_df = trainsetEncoded[['BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP']])
+    if cutMode != "N":
+      edgeT, degreeT = edgeAndDegree(num_node//10, cutMode, position_df = trainsetEncoded[['BOT', 'JUNGLE', 'MID', 'SUPPORT', 'TOP']])
     else:
-      edgeT, degreeT = edgeAndDegree(num_node//10, topButtomCut)
+      edgeT, degreeT = edgeAndDegree(num_node//10, cutMode)
 
     ## -----  모델 구조 lab3 참고
     mode = 'gcn'

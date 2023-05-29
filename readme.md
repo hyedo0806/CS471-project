@@ -27,6 +27,7 @@ cd ./CS471-project
 gdown https://drive.google.com/uc?id=1OTsNTJ8jJ4QZZSoncKGrapM4kl-J6UtD
 
 python GraphLOL.py
+# for setting cutMode, you should insert one of the N, 1 or 2 after execute.
 ```
 
 If you want to use Google Colab (=using .ipynb case), just execute overall codes on GraphLOL.ipynb.
