@@ -3,9 +3,9 @@
 
 This is the result of the project on cs471
 
-* Contributer: Dohye Kim and Seonho An (alphabetical order)
+* Authors: Dohye Kim and Seonho An (alphabetical order)
 * Title: GraphSAGE-based Win/Loss Prediction in League of Legends
-* We use only cpu for our code
+* We use only cpu as a device for our code
 
 ## How to setup and execute
 
